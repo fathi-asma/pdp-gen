@@ -51,7 +51,7 @@ export const generatePDPStream = async function* (userAnswers) {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     const finalPrompt = `
-      ${promptData.prompt}
+      ${promptMarkdown}
 
       --- SAMPLE PDP FOR STRUCTURE REFERENCE ---
       ${samplePDP}
