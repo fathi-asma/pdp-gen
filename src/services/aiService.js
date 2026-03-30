@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import promptData from "../data/prompt.json";
+import promptMarkdown from "../data/prompt.md?raw";
 import samplePDP from "../data/personal_development_planfor_sample.md?raw";
 
 /**
@@ -20,7 +20,7 @@ export const generatePDP = async (userAnswers) => {
 
     // Construct the final prompt by combining the template, the sample, and the user's answers
     const finalPrompt = `
-      ${promptData.prompt}
+      ${promptMarkdown}
 
       --- SAMPLE PDP FOR STRUCTURE REFERENCE ---
       ${samplePDP}
