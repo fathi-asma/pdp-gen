@@ -1,19 +1,33 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+export const config = {
+  runtime: 'edge',
+};
 
-export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+// Initialize once
+let genAI;
 
-  const { userAnswers, promptMarkdown, samplePDP, stream = false } = req.body;
-
-  if (!userAnswers) {
-    return res.status(400).json({ error: "Missing user answers" });
+export default async function handler(request) {
+  if (request.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405,
+      headers: { "Content-Type": "application/json" }
+    });
   }
 
   try {
+    const { userAnswers, promptMarkdown, samplePDP, stream = false } = await request.json();
+
+    if (!userAnswers) {
+      return new Response(JSON.stringify({ error: "Missing user answers" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    if (!genAI) {
+      genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    }
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const finalPrompt = `
@@ -29,30 +43,44 @@ export default async function handler(req, res) {
     `;
 
     if (stream) {
-      // Vercel supports streaming via Serverless Functions but requires specific headers
-      // Note: For heavy streaming applications, Edge Functions are often preferred
       const result = await model.generateContentStream(finalPrompt);
-      
-      res.writeHead(200, {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
+      const encoder = new TextEncoder();
+
+      const customStream = new ReadableStream({
+        async start(controller) {
+          try {
+            for await (const chunk of result.stream) {
+              const chunkText = chunk.text();
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: chunkText })}\n\n`));
+            }
+            controller.close();
+          } catch (e) {
+            controller.error(e);
+          }
+        }
       });
 
-      for await (const chunk of result.stream) {
-        const chunkText = chunk.text();
-        res.write(`data: ${JSON.stringify({ text: chunkText })}\n\n`);
-      }
-      
-      res.end();
+      return new Response(customStream, {
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          "Connection": "keep-alive"
+        }
+      });
     } else {
       const result = await model.generateContent(finalPrompt);
       const response = await result.response;
       const text = response.text();
-      return res.status(200).json({ text });
+      return new Response(JSON.stringify({ text }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
     }
   } catch (error) {
     console.error("Gemini API Error:", error);
-    return res.status(500).json({ error: "Failed to generate PDP", message: error.message });
+    return new Response(JSON.stringify({ error: "Failed to generate PDP", message: error.message }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" }
+    });
   }
 }
