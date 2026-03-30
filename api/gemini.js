@@ -25,6 +25,13 @@ export default async function handler(request) {
       });
     }
 
+    if (!process.env.GEMINI_API_KEY) {
+      return new Response(JSON.stringify({ error: "GEMINI_API_KEY is not configured in Vercel environment variables." }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
     if (!genAI) {
       genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     }

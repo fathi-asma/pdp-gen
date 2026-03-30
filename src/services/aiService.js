@@ -49,7 +49,16 @@ export const generatePDPStream = async function* (userAnswers) {
     });
 
     if (!response.ok) {
-      throw new Error("Failed to start stream");
+      let errorMessage = "Failed to start stream";
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.message || errorData.error || errorMessage;
+      } catch (e) {
+        // Response wasn't JSON
+        const errorText = await response.text();
+        if (errorText) errorMessage = errorText;
+      }
+      throw new Error(errorMessage);
     }
 
     const reader = response.body.getReader();
