@@ -4,7 +4,7 @@ import FormPage from "./pages/FormPage";
 import ResultPage from "./pages/ResultPage";
 import Footer from "./components/Footer";
 import Header from "./components/Header";
-import "./app.css";
+import "./App.css";
 
 function App() {
   return (
