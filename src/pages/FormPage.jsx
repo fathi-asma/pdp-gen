@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Info } from "lucide-react";
 import data from "../data/questions.json";
 
 function FormPage() {
@@ -100,6 +101,14 @@ function FormPage() {
       <header className="header">
         <h1 className="title">AI PDP Generator</h1>
         <p className="subtitle">Answer a few questions and let AI craft your Personal Development Plan.</p>
+        
+        <div className="quota-banner fadeIn">
+          <Info size={18} className="info-icon" />
+          <p>
+            <strong>Api Usage Note:</strong> We are utilizing a free API tier with a limited daily quota. 
+            Please use this tool with care to ensure availability for others.
+          </p>
+        </div>
       </header>
 
       <div className="form-container">

@@ -125,8 +125,37 @@ body {
   color: #6b7280; /* gray-500 */
   font-size: 16px;
   max-width: 500px;
-  margin: 0 auto;
+  margin: 0 auto 24px auto;
   font-weight: 400;
+}
+
+.quota-banner {
+  max-width: 600px;
+  margin: 0 auto;
+  background: #fdf2f2;
+  border: 1px solid #fee2e2;
+  border-radius: 12px;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+}
+
+.quota-banner .info-icon {
+  color: #ef4444;
+  flex-shrink: 0;
+}
+
+.quota-banner p {
+  margin: 0;
+  font-size: 13px;
+  color: #991b1b;
+  line-height: 1.5;
+}
+
+.quota-banner strong {
+  margin-right: 4px;
 }
 
 /* Section Cards */
