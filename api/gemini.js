@@ -1,11 +1,6 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-
 export const config = {
   runtime: 'edge',
 };
-
-// Initialize once
-let genAI;
 
 export default async function handler(request) {
   if (request.method !== "POST") {
@@ -16,7 +11,7 @@ export default async function handler(request) {
   }
 
   try {
-    const { userAnswers, promptMarkdown, samplePDP, stream = false } = await request.json();
+    const { userAnswers, promptMarkdown, samplePDP, stream = false, model = "google/gemini-2.5-flash:free" } = await request.json();
 
     if (!userAnswers) {
       return new Response(JSON.stringify({ error: "Missing user answers" }), {
@@ -25,17 +20,14 @@ export default async function handler(request) {
       });
     }
 
-    if (!process.env.GEMINI_API_KEY) {
-      return new Response(JSON.stringify({ error: "GEMINI_API_KEY is not configured in Vercel environment variables." }), {
+    const apiKey = process.env.OPENROUTER_API_KEY || process.env.GEMINI_API_KEY;
+
+    if (!apiKey) {
+      return new Response(JSON.stringify({ error: "API Key is not configured." }), {
         status: 500,
         headers: { "Content-Type": "application/json" }
       });
     }
-
-    if (!genAI) {
-      genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    }
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     const finalPrompt = `
       ${promptMarkdown}
@@ -49,25 +41,45 @@ export default async function handler(request) {
       Please generate the final Personal Development Plan now based on the instructions in the prompt.
     `;
 
-    if (stream) {
-      const result = await model.generateContentStream(finalPrompt);
-      const encoder = new TextEncoder();
+    const requestBody = {
+      model: model, 
+      messages: [{ role: "user", content: finalPrompt }],
+      stream: stream,
+    }
 
-      const customStream = new ReadableStream({
-        async start(controller) {
-          try {
-            for await (const chunk of result.stream) {
-              const chunkText = chunk.text();
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: chunkText })}\n\n`));
-            }
-            controller.close();
-          } catch (e) {
-            controller.error(e);
-          }
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://pdp-gen.local", // Optional: provide your site URL
+        "X-Title": "PDP Generator", // Optional: provide your site title
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error("OpenRouter API error:", response.status, errText);
+      let errorMsg = "Failed to generate PDP";
+      try {
+        const parsed = JSON.parse(errText);
+        if (parsed.error && parsed.error.message) {
+          errorMsg = parsed.error.message;
         }
+      } catch (e) {
+        // use default error Msg
+      }
+      return new Response(JSON.stringify({ error: "Failed to generate PDP", message: errorMsg }), {
+        status: response.status,
+        headers: { "Content-Type": "application/json" }
       });
+    }
 
-      return new Response(customStream, {
+    if (stream) {
+      // Stream the response directly since OpenRouter's SSE format is supported by aiService.js
+      return new Response(response.body, {
+        status: 200,
         headers: {
           "Content-Type": "text/event-stream",
           "Cache-Control": "no-cache",
@@ -75,17 +87,16 @@ export default async function handler(request) {
         }
       });
     } else {
-      const result = await model.generateContent(finalPrompt);
-      const response = await result.response;
-      const text = response.text();
+      const data = await response.json();
+      const text = data.choices?.[0]?.message?.content || "";
       return new Response(JSON.stringify({ text }), {
         status: 200,
         headers: { "Content-Type": "application/json" }
       });
     }
   } catch (error) {
-    console.error("Gemini API Error:", error);
-    return new Response(JSON.stringify({ error: "Failed to generate PDP", message: error.message }), {
+    console.error("Handler Error:", error);
+    return new Response(JSON.stringify({ error: "Failed to process request", message: error.message }), {
       status: 500,
       headers: { "Content-Type": "application/json" }
     });

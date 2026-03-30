@@ -33,7 +33,7 @@ export const generatePDP = async (userAnswers) => {
   }
 };
 
-export const generatePDPStream = async function* (userAnswers) {
+export const generatePDPStream = async function* (userAnswers, model) {
   try {
     const response = await fetch("/api/gemini", {
       method: "POST",
@@ -45,17 +45,18 @@ export const generatePDPStream = async function* (userAnswers) {
         promptMarkdown,
         samplePDP,
         stream: true,
+        model
       }),
     });
 
     if (!response.ok) {
+      const errorText = await response.text();
       let errorMessage = "Failed to start stream";
       try {
-        const errorData = await response.json();
+        const errorData = JSON.parse(errorText);
         errorMessage = errorData.message || errorData.error || errorMessage;
       } catch (e) {
         // Response wasn't JSON
-        const errorText = await response.text();
         if (errorText) errorMessage = errorText;
       }
       throw new Error(errorMessage);
@@ -74,14 +75,17 @@ export const generatePDPStream = async function* (userAnswers) {
       buffer = lines.pop(); // Keep last incomplete line
 
       for (const line of lines) {
+        if (line.trim() === "data: [DONE]") continue;
         if (line.startsWith("data: ")) {
           try {
             const data = JSON.parse(line.slice(6));
             if (data.text) {
               yield data.text;
+            } else if (data.choices?.[0]?.delta?.content) {
+              yield data.choices[0].delta.content;
             }
           } catch (e) {
-            console.error("Error parsing stream chunk:", e);
+            // Ignore parse errors on incomplete chunks
           }
         }
       }

@@ -2,8 +2,28 @@ import React, { useState, useRef, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import rehypeRaw from "rehype-raw";
-import { Download, ChevronDown, FileText, File, AlertTriangle, Clock } from "lucide-react";
+import { Download, ChevronDown, FileText, File, AlertTriangle, Clock, Bot } from "lucide-react";
 import { generatePDPStream } from "../services/aiService";
+
+const getProviderLogo = (modelId) => {
+  if (!modelId) return null;
+  const id = modelId.toLowerCase();
+
+  if (id.includes('google') || id.includes('gemma')) return "https://api.iconify.design/logos:google-icon.svg";
+  if (id.includes('meta') || id.includes('llama')) return "https://api.iconify.design/logos:meta-icon.svg";
+  if (id.includes('openai') || id.includes('gpt')) return "https://api.iconify.design/logos:openai-icon.svg";
+  if (id.includes('mistral') || id.includes('mixtral')) return "https://api.iconify.design/logos:mistral-icon.svg";
+  if (id.includes('anthropic') || id.includes('claude')) return "https://api.iconify.design/logos:anthropic-icon.svg";
+  if (id.includes('cohere')) return "https://api.iconify.design/logos:cohere-icon.svg";
+  if (id.includes('huggingface')) return "https://api.iconify.design/logos:huggingface-icon.svg";
+
+  if (id.includes('qwen')) return "https://qianwen-res.oss-cn-beijing.aliyuncs.com/logo_qwen.svg";
+  if (id.includes('deepseek')) return "https://upload.wikimedia.org/wikipedia/commons/thumb/0/00/DeepSeek_logo.svg/512px-DeepSeek_logo.svg.png";
+  if (id.includes('microsoft')) return "https://api.iconify.design/logos:microsoft-icon.svg";
+  if (id.includes('x-ai') || id.includes('grok')) return "https://upload.wikimedia.org/wikipedia/commons/thumb/c/ce/X_logo_2023.svg/512px-X_logo_2023.svg.png";
+
+  return null;
+};
 
 function ResultPage() {
   const location = useLocation();
@@ -13,26 +33,27 @@ function ResultPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState("");
   const dropdownRef = useRef(null);
-  
+
   const userAnswers = location.state?.userAnswers;
+  const selectedModel = location.state?.selectedModel;
 
   // Stream generation on mount if userAnswers are provided
   useEffect(() => {
     if (!userAnswers) return;
-    
+
     let isCancelled = false;
-    
+
     const streamResponse = async () => {
       setIsGenerating(true);
       setError("");
       setResult("");
-      
+
       try {
-        const stream = await generatePDPStream(userAnswers);
+        const stream = await generatePDPStream(userAnswers, selectedModel);
         for await (const chunk of stream) {
           if (isCancelled) break;
           setResult(prev => prev + chunk);
-          
+
           // Auto-scroll to bottom while generating
           window.scrollTo({
             top: document.documentElement.scrollHeight,
@@ -48,9 +69,9 @@ function ResultPage() {
         if (!isCancelled) setIsGenerating(false);
       }
     };
-    
+
     streamResponse();
-    
+
     return () => { isCancelled = true; };
   }, [userAnswers]);
 
@@ -108,7 +129,7 @@ function ResultPage() {
     // Use Blob to handle large documents reliably
     const blob = new Blob(['\ufeff', sourceHTML], { type: 'application/msword' });
     const url = URL.createObjectURL(blob);
-    
+
     const fileDownload = document.createElement("a");
     document.body.appendChild(fileDownload);
     fileDownload.href = url;
@@ -120,11 +141,11 @@ function ResultPage() {
 
   const handleMarkdownExport = () => {
     setIsDropdownOpen(false);
-    
+
     // Using the raw result perfectly preserves the original `[page xx]` structure from the AI generated payload.
     const blob = new Blob(['\ufeff', result], { type: 'text/markdown;charset=utf-8' });
     const url = URL.createObjectURL(blob);
-    
+
     const fileDownload = document.createElement("a");
     document.body.appendChild(fileDownload);
     fileDownload.href = url;
@@ -140,15 +161,15 @@ function ResultPage() {
   return (
     <div className="container result-page">
       <header className="header" style={{ marginBottom: "2rem" }}>
-         <button className="secondary-btn back-btn" onClick={() => navigate("/")} disabled={isGenerating}>
-            &larr; Back to Generator
-         </button>
+        <button className="secondary-btn back-btn" onClick={() => navigate("/")} disabled={isGenerating}>
+          &larr; Back to Generator
+        </button>
       </header>
 
       {error ? (
         <div className={
           (error.toLowerCase().includes("quota") || error.includes("429") || error.toLowerCase().includes("limit"))
-            ? "quota-error-card fadeIn" 
+            ? "quota-error-card fadeIn"
             : "error-message"
         }>
           {(error.toLowerCase().includes("quota") || error.includes("429") || error.toLowerCase().includes("limit")) ? (
@@ -157,11 +178,11 @@ function ResultPage() {
                 <AlertTriangle size={32} />
               </div>
               <div className="quota-info">
-                <h3>Daily Generation Limit Reached</h3>
-                <p>We are currently running on a free API tier which has a strictly limited number of generations per day.</p>
+                <h3>Model Generation Failed</h3>
+                <p>Some models might not be working right now. If your selected model failed, please try choosing a different one from the list.</p>
                 <div className="quota-notice">
                   <Clock size={16} />
-                  <span>Please wait until the administrator updates the API key or try again in 24 hours.</span>
+                  <span>Sorry for the inconvenience. Return to the form to select a different model.</span>
                 </div>
                 <button className="secondary-btn" onClick={() => navigate("/")} style={{ marginTop: '1.5rem', width: '100%' }}>
                   Return to Home
@@ -181,14 +202,23 @@ function ResultPage() {
       ) : (
         <div id="pdp-result" className="result-container fadeIn" style={{ marginTop: 0 }}>
           <div className="result-header">
-            <h2>
-              {isGenerating ? "Generating Your Plan..." : "Your Personal Development Plan"}
+            <h2 style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              {(() => {
+                if (!selectedModel) return null;
+                const logoUrl = getProviderLogo(selectedModel);
+                return logoUrl ? (
+                  <img src={logoUrl} alt="AI Logo" style={{ width: 28, height: 28, objectFit: 'contain' }} />
+                ) : (
+                  <Bot size={28} color="#6c63ff" />
+                );
+              })()}
+              <span>{isGenerating ? "Generating Your Plan..." : "Your Personal Development Plan"}</span>
               {isGenerating && <span className="spinner" style={{ display: 'inline-block', marginLeft: '12px', width: '14px', height: '14px', borderColor: '#6c63ff', borderTopColor: 'transparent' }}></span>}
             </h2>
-            
+
             <div className="dropdown-container" ref={dropdownRef} style={{ position: 'relative' }}>
-              <button 
-                className="print-btn dropdown-toggle" 
+              <button
+                className="print-btn dropdown-toggle"
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                 disabled={isGenerating || !result}
                 style={{ opacity: (isGenerating || !result) ? 0.5 : 1 }}
@@ -197,7 +227,7 @@ function ResultPage() {
                 Export As
                 <ChevronDown size={18} style={{ marginLeft: "6px" }} />
               </button>
-              
+
               {isDropdownOpen && (
                 <div className="dropdown-menu" style={{ position: 'absolute', right: 0, marginTop: '5px', background: 'white', border: '1px solid #eee', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 10, minWidth: '180px' }}>
                   <button className="dropdown-item" onClick={handlePdfExport} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '10px 15px', border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left' }}>
