@@ -88,4 +88,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 Contributions, issues, and feature requests are welcome! Feel free to check the issues page.
 
 ---
-Built with ❤️ by [Senuda](https://github.com/senuda-d)
+Built with ❤️ by [Senuda] & [Thisal](https://github.com/senuda-d)
